@@ -1,0 +1,132 @@
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//
+//  E X T E N D E D   H Y P E R S P E E D
+//      Pretty much scales scroll speed of difficulties,
+//      this does NOT affect any "real" hyperspeed values
+//
+//                                              - Zedek
+//
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+Unknown [GHWT_HEADER]
+
+// Default value for per-speed modifier
+// (The final value will be 1.0 / per_speed_hs_modifier)
+//          So in this case, 0.05
+
+// 20 is the default -IMF24
+SectionInteger per_speed_hs_modifier 20
+
+/*
+SectionStruct difficulty_list_props
+{
+	StructHeader
+	{
+		StructStruct easy_rhythm
+		{
+			StructHeader
+			{
+				StructInt index = 0
+				StructString text_nl = "easy"
+				StructString text_nl_real = "easy_rhythm"
+				StructQBStringQs text = 0x74d6a0a0
+				StructQBStringQs text_upper = 0x74d6a0a0
+				StructFloat scroll_time = 3.5
+				StructFloat game_speed = 1.5
+			}
+		}
+	}
+}
+*/
+
+// ---------------------------------------
+// Affect a hyperspeed value
+//
+//  difficulty
+// ---------------------------------------
+
+Script ExtendHyperspeed [
+    :i $RequireParams$ :a{ $difficulty$ :a} $all$
+    
+    // Not a valid difficulty
+    :i if NOT $StructureContains$ $structure$=~$difficulty_list_props$ %GLOBAL%$difficulty$
+        :i return
+    :i endif
+    
+    :i $new_props$ = (~$difficulty_list_props$ -> %GLOBAL%$difficulty$)
+    
+    // -------------
+    
+    // How much do we want to modify the speed by?
+    // Let's get it from the INI!
+    
+    // First, let's get our per-number speed modifier
+    // (GetINIValue doesn't support negatives (yet) so this is a hack)
+    
+    :i $DE_GetINIValue$ $Section$=%s("HyperSpeed") $Key$=%s("PerSpeedModifier") $default$=(~$per_speed_hs_modifier$)
+    :i $per_speed_mod$ = (%f(1.0) / (%GLOBAL%$value$ * %f(1.0)))
+    
+    // Speed integer we'll use to multiply
+    // We can define _Slow in the INI to lower it, otherwise it raises it
+    
+    :i $speed_integer$ = %i(0)
+    
+    // Get POSITIVE speed modifier
+    :i $FormatText$ $TextName$=$key_value$ %s("Speed_%g") $g$=(%GLOBAL%$new_props$ -> $text_nl_real$)
+    :i $DE_GetINIValue$ $Section$=%s("Hyperspeed") $Key$=%GLOBAL%$key_value$ $default$=%i(0)
+    
+    :i if (%GLOBAL%$value$ > %i(0))
+        :i %GLOBAL%$speed_integer$ = %GLOBAL%$value$
+    :i endif
+    
+    // Get NEGATIVE speed modifier
+    :i $FormatText$ $TextName$=$key_value$ %s("Speed_%g_Neg") $g$=(%GLOBAL%$new_props$ -> $text_nl_real$)
+    :i $DE_GetINIValue$ $Section$=%s("Hyperspeed") $Key$=%GLOBAL%$key_value$ $default$=%i(0)
+    
+    :i if (%GLOBAL%$value$ > %i(0))
+        :i %GLOBAL%$speed_integer$ = (%GLOBAL%$value$ * %i(-1))
+    :i endif
+    
+    // No change, abort
+    :i if (%GLOBAL%$speed_integer$ = %i(0))
+        :i $printf$ %s("  No speed change for %g, ignoring...") $g$=(%GLOBAL%$new_props$ -> $text_nl_real$)
+        :i return
+    :i endif
+    
+    :i $final_speed_mult$ = (%f(1.0) + (%GLOBAL%$per_speed_mod$ * %GLOBAL%$speed_integer$))
+    :i $printf$ %s("  Final speed integer: %g, Multiplier: %h") $g$=%GLOBAL%$speed_integer$ $h$=%GLOBAL%$final_speed_mult$
+    
+    // Alright, now multiply the value in the struct
+    
+    :i $new_scroll_speed$ = ((%GLOBAL%$new_props$ -> $scroll_time$) * %GLOBAL%$final_speed_mult$)
+    :i $printf$ %s("    New final speed: %g") $g$=%GLOBAL%$new_scroll_speed$
+    
+    // Update the struct
+    
+    :i $new_props$ = :s{
+        :i %GLOBAL%$new_props$
+        :i $scroll_time$ = %GLOBAL%$new_scroll_speed$
+    :i :s}
+    
+    // Now we need to update it in the global difficulty struct
+    
+    :i $AddToGlobalStruct$ $id$=$difficulty_list_props$ $field$=%GLOBAL%$difficulty$ $element$=%GLOBAL%$new_props$
+
+    :i endfunction
+]
+
+// ---------------------------------------
+// Load the mod!
+// ---------------------------------------
+
+Script ExtendedHyperspeed_Load [
+    :i $printf$ %s("Loading Extended Hyperspeed...")
+    
+    :i $ExtendHyperspeed$ $difficulty$=$easy_rhythm$
+    :i $ExtendHyperspeed$ $difficulty$=$easy$
+    :i $ExtendHyperspeed$ $difficulty$=$medium$
+    :i $ExtendHyperspeed$ $difficulty$=$hard$
+    :i $ExtendHyperspeed$ $difficulty$=$expert$
+    
+    :i endfunction
+]
